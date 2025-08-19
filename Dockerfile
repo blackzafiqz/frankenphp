@@ -1,4 +1,4 @@
-ARG PHP_VERSION=
+ARG PHP_VERSION=8.3.24
 FROM dunglas/frankenphp:php${PHP_VERSION} AS main
 ENV XDG_CONFIG_HOME=/tmp
 
@@ -15,14 +15,11 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     zip \
     unzip \
-    libmagickwand-dev \
     wget
 
 
 # Install PHP extensions
 RUN install-php-extensions pdo_mysql mbstring exif pcntl bcmath gd zip
-RUN pecl install imagick
-RUN docker-php-ext-enable imagick
 
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && sed -E -i -e 's/max_execution_time = 30/max_execution_time = 120/' $PHP_INI_DIR/php.ini \
