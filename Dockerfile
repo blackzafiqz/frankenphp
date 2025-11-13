@@ -1,4 +1,4 @@
-ARG PHP_VERSION=8.3.24
+ARG PHP_VERSION=8.3.27
 FROM dunglas/frankenphp:php${PHP_VERSION} AS main
 ENV XDG_CONFIG_HOME=/tmp
 
@@ -19,8 +19,7 @@ RUN apt-get update && apt-get install -y \
 
 
 # Install PHP extensions
-RUN install-php-extensions pdo_mysql mbstring exif pcntl bcmath gd zip
-
+RUN install-php-extensions pdo_mysql mbstring exif pcntl bcmath gd zip redis
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && sed -E -i -e 's/max_execution_time = 30/max_execution_time = 120/' $PHP_INI_DIR/php.ini \
     && sed -E -i -e 's/memory_limit = 128M/memory_limit = 512M/' $PHP_INI_DIR/php.ini \
