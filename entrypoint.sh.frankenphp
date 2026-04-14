@@ -4,4 +4,4 @@ source /import.sh
 
 php artisan optimize
 
-php artisan octane:frankenphp --host 0.0.0.0 --port 80
+php artisan octane:frankenphp --host 0.0.0.0 --port 80 --workers 4 --max-request 300
