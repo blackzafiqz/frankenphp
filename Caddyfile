@@ -48,5 +48,4 @@ http:// {
 
         {$CADDY_SERVER_EXTRA_DIRECTIVES}
         import common
-        php_server
 }
