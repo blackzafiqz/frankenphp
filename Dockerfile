@@ -1,4 +1,4 @@
-ARG PHP_VERSION=8.5.2
+ARG PHP_VERSION=8.5.9
 FROM dunglas/frankenphp:php${PHP_VERSION} AS main
 ENV XDG_CONFIG_HOME=/tmp
 
