@@ -5,6 +5,9 @@
                 
                 {$FRANKENPHP_CONFIG}
         }
+        servers {
+            trusted_proxies 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+        }
 }
 (common) {
     header /* {
@@ -45,5 +48,4 @@ http:// {
 
         {$CADDY_SERVER_EXTRA_DIRECTIVES}
         import common
-        php_server
 }
