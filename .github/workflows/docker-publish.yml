@@ -2,11 +2,22 @@ name: Docker
 
 on:
   push:
-    tags: [ 'php*.*.*' ]
+    tags: ["php*.*.*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: Image/git tag, e.g. php8.5.12
+        required: true
+        type: string
+      ref:
+        description: Branch to build from
+        required: true
+        type: string
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   build:
@@ -19,18 +30,19 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Extract version
         id: version
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
           echo "full=$TAG" >> $GITHUB_OUTPUT
           echo "short=${TAG%.*}" >> $GITHUB_OUTPUT
+          echo "php=${TAG#php}" >> $GITHUB_OUTPUT
 
       - name: Log into registry
         uses: docker/login-action@v4
@@ -45,6 +57,7 @@ jobs:
           context: .
           push: true
           platforms: linux/${{ matrix.arch }}
+          build-args: PHP_VERSION=${{ steps.version.outputs.php }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.full }}-${{ matrix.arch }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.short }}-${{ matrix.arch }}
@@ -54,6 +67,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
+      contents: write
       packages: write
 
     steps:
@@ -66,7 +80,6 @@ jobs:
 
       - name: Create and push multi-arch manifest
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
           SHORT=${TAG%.*}
 
           docker buildx imagetools create \
@@ -74,3 +87,16 @@ jobs:
             -t $REGISTRY/$IMAGE_NAME:$SHORT \
             $REGISTRY/$IMAGE_NAME:$TAG-amd64 \
             $REGISTRY/$IMAGE_NAME:$TAG-arm64
+
+      # Tag only after both arches published, so a failed build is retried on the next run
+      - name: Checkout repository
+        if: github.ref_type != 'tag'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Tag repository
+        if: github.ref_type != 'tag'
+        run: |
+          git tag "$TAG"
+          git push origin "$TAG"

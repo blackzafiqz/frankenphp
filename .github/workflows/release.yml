@@ -1,0 +1,51 @@
+name: Build on new dunglas/frankenphp release
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.upstream.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find new upstream PHP patch versions
+        id: upstream
+        run: |
+          include='[]'
+          # Branch name == PHP minor series
+          for minor in 8.3 8.4 8.5; do
+            latest=$(curl -fsS "https://hub.docker.com/v2/repositories/dunglas/frankenphp/tags?name=php${minor}.&page_size=100" \
+              | jq -r '.results[].name' \
+              | grep -E "^php${minor//./\\.}\.[0-9]+$" \
+              | sort -V | tail -1)
+            [ -z "$latest" ] && continue
+            git rev-parse -q --verify "refs/tags/$latest" >/dev/null && continue
+            include=$(jq -c --arg b "$minor" --arg t "$latest" '. + [{branch:$b, tag:$t}]' <<<"$include")
+          done
+          echo "matrix=$include" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: detect
+    if: needs.detect.outputs.matrix != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    uses: ./.github/workflows/docker-publish.yml
+    permissions:
+      contents: write
+      packages: write
+    with:
+      tag: ${{ matrix.tag }}
+      ref: ${{ matrix.branch }}
