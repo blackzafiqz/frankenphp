@@ -10,7 +10,7 @@ on:
         required: true
         type: string
       ref:
-        description: Branch to build from
+        description: Git ref to build, e.g. the tag
         required: true
         type: string
 
@@ -67,7 +67,6 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
       packages: write
 
     steps:
@@ -87,16 +86,3 @@ jobs:
             -t $REGISTRY/$IMAGE_NAME:$SHORT \
             $REGISTRY/$IMAGE_NAME:$TAG-amd64 \
             $REGISTRY/$IMAGE_NAME:$TAG-arm64
-
-      # Tag only after both arches published, so a failed build is retried on the next run
-      - name: Checkout repository
-        if: github.ref_type != 'tag'
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref }}
-
-      - name: Tag repository
-        if: github.ref_type != 'tag'
-        run: |
-          git tag "$TAG"
-          git push origin "$TAG"

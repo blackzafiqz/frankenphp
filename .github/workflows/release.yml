@@ -10,42 +10,61 @@ permissions:
   packages: write
 
 jobs:
-  detect:
+  bump:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.upstream.outputs.matrix }}
+      matrix: ${{ steps.bump.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Find new upstream PHP patch versions
-        id: upstream
+      - name: Bump PHP version and tag on every branch except main
+        id: bump
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           include='[]'
-          # Branch name == PHP minor series
-          for minor in 8.3 8.4 8.5; do
+
+          for branch in $(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin | grep -vxE 'main|HEAD'); do
+            git checkout -q -B "$branch" "origin/$branch"
+            current=$(sed -nE 's/^ARG PHP_VERSION=([0-9]+\.[0-9]+\.[0-9]+)$/\1/p' Dockerfile)
+            [ -z "$current" ] && continue
+            minor=${current%.*}
+
             latest=$(curl -fsS "https://hub.docker.com/v2/repositories/dunglas/frankenphp/tags?name=php${minor}.&page_size=100" \
               | jq -r '.results[].name' \
               | grep -E "^php${minor//./\\.}\.[0-9]+$" \
-              | sort -V | tail -1)
+              | sed 's/^php//' | sort -V | tail -1)
             [ -z "$latest" ] && continue
-            git rev-parse -q --verify "refs/tags/$latest" >/dev/null && continue
-            include=$(jq -c --arg b "$minor" --arg t "$latest" '. + [{branch:$b, tag:$t}]' <<<"$include")
+
+            if [ "$latest" != "$current" ]; then
+              sed -i -E "s/^(ARG PHP_VERSION=).*/\1$latest/" Dockerfile
+              git commit -qam "bump php version to $latest"
+              git push origin "$branch"
+            fi
+
+            tag="php$latest"
+            git rev-parse -q --verify "refs/tags/$tag" >/dev/null && continue
+            git tag "$tag"
+            git push origin "$tag"
+            include=$(jq -c --arg t "$tag" '. + [{tag:$t}]' <<<"$include")
           done
+
           echo "matrix=$include" >> "$GITHUB_OUTPUT"
 
+  # Tags pushed with GITHUB_TOKEN don't trigger the tag workflow, so call it directly
   publish:
-    needs: detect
-    if: needs.detect.outputs.matrix != '[]'
+    needs: bump
+    if: needs.bump.outputs.matrix != '[]'
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+        include: ${{ fromJSON(needs.bump.outputs.matrix) }}
     uses: ./.github/workflows/docker-publish.yml
     permissions:
-      contents: write
+      contents: read
       packages: write
     with:
       tag: ${{ matrix.tag }}
-      ref: ${{ matrix.branch }}
+      ref: ${{ matrix.tag }}
